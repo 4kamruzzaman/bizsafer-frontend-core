@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: bizsafer_frontend
+    restart: always
+    networks:
+      - bizsafer_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  bizsafer_network:
+    external: true
