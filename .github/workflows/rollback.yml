@@ -1,0 +1,23 @@
+name: Manual Frontend Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit_hash:
+        description: 'Commit Hash to revert to'
+        required: true
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH Reversion
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /var/www/bizsafer
+            git checkout ${{ github.event.inputs.commit_hash }}
+            docker-compose up -d --build
