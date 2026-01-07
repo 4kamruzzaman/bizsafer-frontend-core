@@ -3,41 +3,65 @@ name: Frontend Production Deployment
 on:
   push:
     branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
 jobs:
-  deploy:
+  # --- STAGE 1: CI (Testing & Linting) ---
+  test:
     runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci # 'npm ci' is faster/cleaner than 'npm install' for CI
+
+      - name: Run Linter (Check for code errors)
+        # Only run if you have a lint script in package.json
+        run: npm run lint --if-present
+
+      - name: Run Unit Tests
+        # Only run if you have a test script in package.json
+        run: npm run test --if-present
+
+  # --- STAGE 2: CD (Deployment) ---
+  deploy:
+    needs: test # CRITICAL: This waits for the 'test' job to succeed
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' # Only deploy main branch, not PRs
     steps:
       - name: Checkout Private Repo
         uses: actions/checkout@v4
+        with:
+          ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
-      - name: Deploy to VPS
+      - name: Deploy to VPS via SSH
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.PROD_HOST }}
           username: ${{ secrets.PROD_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          # This allows the VPS to "forward" the auth to GitHub to pull the code
-          ssh_options: -A 
+          ssh_options: -A
           script: |
-            # 1. Go to project folder
             cd /var/www/bizsafer
-            
-            # 2. Pull latest code (VPS uses Agent Forwarding to auth with GitHub)
             git pull origin main
             
-            # 3. Rebuild container
+            # Rebuild and start
             docker-compose up -d --build
             
-            # 4. SRE Health Gate (Automated Rollback)
-            echo "Checking health..."
+            # --- STAGE 3: PRODUCTION HEALTH GATE ---
+            echo "Verifying deployment health..."
             sleep 30
             if [ "$(docker inspect -f '{{.State.Health.Status}}' bizsafer_frontend)" != "healthy" ]; then
-              echo "Health check failed! Rolling back..."
-              # In a git-pull based flow, rollback means checking out previous commit
-              # But for immediate fix, we stop the bad container
+              echo "Health check failed! Stopping bad container..."
               docker-compose stop
-              echo "Manual intervention required or revert git commit."
               exit 1
             fi
-            echo "Deployment Success!"
+            echo "Frontend Deployed & Verified!"
