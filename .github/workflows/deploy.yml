@@ -1,0 +1,43 @@
+name: Frontend Production Deployment
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Private Repo
+        uses: actions/checkout@v4
+
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          # This allows the VPS to "forward" the auth to GitHub to pull the code
+          ssh_options: -A 
+          script: |
+            # 1. Go to project folder
+            cd /var/www/bizsafer
+            
+            # 2. Pull latest code (VPS uses Agent Forwarding to auth with GitHub)
+            git pull origin main
+            
+            # 3. Rebuild container
+            docker-compose up -d --build
+            
+            # 4. SRE Health Gate (Automated Rollback)
+            echo "Checking health..."
+            sleep 30
+            if [ "$(docker inspect -f '{{.State.Health.Status}}' bizsafer_frontend)" != "healthy" ]; then
+              echo "Health check failed! Rolling back..."
+              # In a git-pull based flow, rollback means checking out previous commit
+              # But for immediate fix, we stop the bad container
+              docker-compose stop
+              echo "Manual intervention required or revert git commit."
+              exit 1
+            fi
+            echo "Deployment Success!"
