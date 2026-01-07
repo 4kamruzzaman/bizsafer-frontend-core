@@ -18,8 +18,7 @@ The frontend is architected to provide a seamless user experience while maintain
 ├── src/                   # React + Vite + Tailwind CSS source
 ├── public/                # Static assets and configuration
 ├── nginx/
-│   └── conf.d/
-│       └── frontend.conf  # Nginx config for www.bizsafer.com
+│     └── frontend.conf  # Nginx config for www.bizsafer.com
 ├── docker-compose.yml     # Frontend service orchestration
 └── README.md              # Delivery & infrastructure documentation
 ```
